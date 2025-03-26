@@ -18,6 +18,7 @@ public class Board : MonoBehaviour {
         new Vector2Int(-1,  1),
     };
 
+    private bool isGameStart;
     private int boardWidth;
     private int boardHeight;
     private float tileSize;
@@ -30,6 +31,7 @@ public class Board : MonoBehaviour {
 
     public void Initialize(GameManager gm, int height, int width, float size, int mine) {
         gameManager = gm;
+        isGameStart = false;
         boardHeight = height;
         boardWidth = width;
         tileSize = size;
@@ -40,26 +42,8 @@ public class Board : MonoBehaviour {
         CreateTileObject();
     }
 
-    public void OpenTiles(Vector2Int gridPos) {
-        // 初回オープンされた際にタイル情報をセット⇒一手目は安全
-        if(tileStates == null) {
-            DebugLogger.Log("Initialize OpenTiles");
-            SetTileOpenState(gridPos);
-        }
-
-        if(gameManager.IsGameOver) {
-            return;
-        }
-
-        OpenAroundTile(gridPos);
-    }
-
-    public void FlagTiles(Vector2Int gridPos) {
-
-    }
-
-    private void OpenAroundTile(Vector2Int gridPos) {
-        if(!IsWithinGrid(gridPos)) {
+    public void OpenTile(Vector2Int gridPos) {
+        if(!IsWithinBoard(gridPos)) {
             return;
         }
 
@@ -68,22 +52,40 @@ public class Board : MonoBehaviour {
             return;
         }
 
-        DebugLogger.Log(gridPos);
-        tileObjects[gridPos.y, gridPos.x].Open();
-        closeTileCount--;
+        // 初回オープンされた際にタイル情報をセット⇒一手目は安全
+        if(!isGameStart) {
+            DebugLogger.Log("Initialize OpenTiles");
+            InitializeTileState(gridPos);
+            isGameStart = true;
+        }
 
-        // 地雷に隣接もしくは地雷マスであれば周りは開かない
-        if(tileStates[gridPos.y, gridPos.x] != TileState.EmptyId) {
-            // 地雷だったらゲームオーバー
-            if(tileStates[gridPos.y, gridPos.x] == TileState.MineId) {
-                gameManager.GameOver();
-            }
+        // ゲームオーバー状態なら処理を終了する
+        // TODO: GameManager側で制御するほうがいいかも
+        if(gameManager.IsGameOver) {
             return;
         }
 
-        foreach(Vector2Int offset in offsets) {
-            OpenAroundTile(gridPos + offset);
-        }
+        DebugLogger.Log(gridPos);
+        TileOpenBFS(gridPos);
+        //tileObjects[gridPos.y, gridPos.x].Open();
+        //closeTileCount--;
+
+        //// 地雷に隣接もしくは地雷マスであれば周りは開かない
+        //if(tileObjects[gridPos.y, gridPos.x].BuriedItem != BuriedItemType.Empty) {
+        //    // 地雷だったらゲームオーバー
+        //    if(tileObjects[gridPos.y, gridPos.x].BuriedItem == BuriedItemType.Mine) {
+        //        gameManager.GameOver();
+        //    }
+        //    return;
+        //}
+
+        //foreach(Vector2Int offset in offsets) {
+        //    OpenTile(gridPos + offset);
+        //}
+    }
+
+    public void FlagTiles(Vector2Int gridPos) {
+        flagTileCount++;
     }
 
     private void CreateTileObject() {
@@ -105,37 +107,39 @@ public class Board : MonoBehaviour {
         }
     }
 
-    private void SetTileOpenState(Vector2Int clickPos) {
-        tileStates = new int[boardHeight, boardWidth];  // 0初期化済み
+    private void InitializeTileState(Vector2Int gridPos) {
+        // TODO: gridPosは地雷にならないような処理を追加する
+        BuriedItemType[,] tileStates = new BuriedItemType[boardHeight, boardWidth];
 
-        foreach(Vector2Int minePos in GenerateBuryingMinesPosition()) {
-            tileStates[minePos.y, minePos.x] = TileState.MineId;
+        foreach(Vector2Int minePos in GenerateBuryingMinesPosition(gridPos)) {
+            tileStates[minePos.y, minePos.x] = BuriedItemType.Mine;
 
             foreach(Vector2Int offset in offsets) {
                 Vector2Int pos = minePos - offset;
 
-                if(!IsWithinGrid(pos)) {
+                if(!IsWithinBoard(pos)) {
                     continue;
                 }
 
                 //// 地雷ならスキップ
-                if(tileStates[pos.y, pos.x] == TileState.MineId) {
+                if(tileStates[pos.y, pos.x] == BuriedItemType.Mine) {
                     continue;
                 }
 
-                tileStates[pos.y, pos.x]++;
+                tileStates[pos.y, pos.x] = tileStates[pos.y, pos.x].Next();
             }
         }
 
         for(int y = 0; y < boardHeight; y++) {
             for(int x = 0; x < boardWidth; x++) {
-                tileObjects[y, x].InitializeOpenTile(tileStates[y, x]);
+                tileObjects[y, x].InitializeBuriedItem(tileStates[y, x]);
             }
         }
     }
 
-    private Vector2Int[] GenerateBuryingMinesPosition() {
-        List<int> randList = UniqueRandomGenerator.UniqueRandomInt(0, boardWidth * boardHeight, mineCount);
+    private Vector2Int[] GenerateBuryingMinesPosition(Vector2Int excludePos) {
+        List<int> excludes = new List<int>{ (excludePos.x + excludePos.y * boardWidth) };
+        List<int> randList = UniqueRandomGenerator.UniqueRandomInt(0, boardWidth * boardHeight, mineCount, excludes);
         Vector2Int[] minePositions = new Vector2Int[mineCount];
 
         for(int i = 0; i < randList.Count; i++) {
@@ -145,7 +149,7 @@ public class Board : MonoBehaviour {
         return minePositions;
     }
 
-    private bool IsWithinGrid(Vector2Int pos) {
+    private bool IsWithinBoard(Vector2Int pos) {
         if(pos.y < 0 || pos.y >= boardHeight || pos.x < 0 || pos.x >= boardWidth) {
             return false;
         }
@@ -153,7 +157,46 @@ public class Board : MonoBehaviour {
         return true;
     }
 
-    private void TileFullOpen() {
+    // BreadthFirstSearch
+    private void TileOpenBFS(Vector2Int first) {
+        Queue<Vector2Int> queue = new Queue<Vector2Int>();
+        bool[,] visited = new bool[boardHeight, boardWidth];
+
+        queue.Enqueue(first);
+        visited[first.y, first.x] = true;
+
+        while(queue.Count > 0) {
+            Vector2Int current = queue.Dequeue();
+
+            Tile tile = tileObjects[current.y, current.x];
+
+            if(tile.IsOpen || tile.IsFlag) {
+                continue;
+            }
+
+            tile.Open();
+
+            if(tile.BuriedItem != BuriedItemType.Empty) {
+                if(tile.BuriedItem == BuriedItemType.Mine) {
+                    gameManager.GameOver();
+                }
+                continue;
+            }
+
+            foreach(Vector2Int offset in offsets) {
+                Vector2Int next = current + offset;
+
+                if(!IsWithinBoard(next) || visited[next.y, next.x]) {
+                    continue;
+                }
+
+                queue.Enqueue(next);
+                visited[next.y, next.x] = true;
+            }
+        }
+    }
+
+    public void TileFullOpen() {
         foreach(Tile tile in tileObjects) {
             if(tile.IsOpen) {
                 continue;

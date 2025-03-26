@@ -17,6 +17,7 @@ public class Tile : MonoBehaviour, IClickEvent {
 
     private Board board;
     private Vector2Int gridPosition;
+    private BuriedItemType buriedItem;
     private bool isOpen;
     private bool isFlag;
 
@@ -32,6 +33,10 @@ public class Tile : MonoBehaviour, IClickEvent {
         get => isFlag;
     }
 
+    public BuriedItemType BuriedItem {
+        get => buriedItem;
+    }
+
     public void Initialize(Board board, Vector2Int pos) {
         openSprite.enabled = true;
         openSprite.sprite = null;
@@ -44,8 +49,9 @@ public class Tile : MonoBehaviour, IClickEvent {
         isFlag = false;
     }
 
-    public void InitializeOpenTile(int count) {
-        openSprite.sprite = openSprites[count];
+    public void InitializeBuriedItem(BuriedItemType itemType) {
+        buriedItem = itemType;
+        openSprite.sprite = openSprites[(int)itemType];
     }
 
     public void Open() {
@@ -63,7 +69,7 @@ public class Tile : MonoBehaviour, IClickEvent {
             return;
         }
 
-        board.OpenTiles(gridPosition);
+        board.OpenTile(gridPosition);
     }
 
     public void OnMouseRightButtonDown() {
