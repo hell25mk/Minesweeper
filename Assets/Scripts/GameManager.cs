@@ -32,6 +32,10 @@ public class GameManager : MonoBehaviour {
 
     public void Update() {
         mouseManager.OnUpdate();
+
+        if(Input.GetKeyDown(KeyCode.Space)) {
+            board.TileFullOpen();
+        }
     }
 
     private void InitializeBoard() {
