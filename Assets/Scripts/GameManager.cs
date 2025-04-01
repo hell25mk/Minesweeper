@@ -52,6 +52,6 @@ public class GameManager : MonoBehaviour {
 
     public void GameOver() {
         isGameOver = true;
-        GeneralScript.DebugLogger.Log("GameOver");
+        DebugLogger.Log("GameOver");
     }
 }

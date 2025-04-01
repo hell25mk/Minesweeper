@@ -24,7 +24,7 @@ public class Board : MonoBehaviour {
     private float tileSize;
     private int mineCount;
     private Tile[,] tileObjects;
-    private int[,] tileStates;
+    private Vector2Int[] minePositions;
 
     private int closeTileCount;
     private int flagTileCount;
@@ -67,21 +67,6 @@ public class Board : MonoBehaviour {
 
         DebugLogger.Log(gridPos);
         TileOpenBFS(gridPos);
-        //tileObjects[gridPos.y, gridPos.x].Open();
-        //closeTileCount--;
-
-        //// 地雷に隣接もしくは地雷マスであれば周りは開かない
-        //if(tileObjects[gridPos.y, gridPos.x].BuriedItem != BuriedItemType.Empty) {
-        //    // 地雷だったらゲームオーバー
-        //    if(tileObjects[gridPos.y, gridPos.x].BuriedItem == BuriedItemType.Mine) {
-        //        gameManager.GameOver();
-        //    }
-        //    return;
-        //}
-
-        //foreach(Vector2Int offset in offsets) {
-        //    OpenTile(gridPos + offset);
-        //}
     }
 
     public void FlagTiles(Vector2Int gridPos) {
@@ -140,7 +125,7 @@ public class Board : MonoBehaviour {
     private Vector2Int[] GenerateBuryingMinesPosition(Vector2Int excludePos) {
         List<int> excludes = new List<int>{ (excludePos.x + excludePos.y * boardWidth) };
         List<int> randList = UniqueRandomGenerator.UniqueRandomInt(0, boardWidth * boardHeight, mineCount, excludes);
-        Vector2Int[] minePositions = new Vector2Int[mineCount];
+        minePositions = new Vector2Int[mineCount];
 
         for(int i = 0; i < randList.Count; i++) {
             minePositions[i] = new Vector2Int(randList[i] % boardWidth, randList[i] / boardWidth);
@@ -179,6 +164,7 @@ public class Board : MonoBehaviour {
             if(tile.BuriedItem != BuriedItemType.Empty) {
                 if(tile.BuriedItem == BuriedItemType.Mine) {
                     gameManager.GameOver();
+                    MineFullOpen();
                 }
                 continue;
             }
@@ -193,6 +179,12 @@ public class Board : MonoBehaviour {
                 queue.Enqueue(next);
                 visited[next.y, next.x] = true;
             }
+        }
+    }
+
+    private void MineFullOpen() {
+        foreach(Vector2Int pos in minePositions) {
+            tileObjects[pos.y, pos.x].Open();
         }
     }
 
